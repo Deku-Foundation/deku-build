@@ -51,9 +51,9 @@ The Rust implementation is pinned by `rust-toolchain.toml` and checked in CI wit
 
 ```sh
 cargo fmt --all -- --check
-cargo clippy --all-targets --all-features -- -D warnings
-cargo test --all-targets --all-features
-cargo run -- validate-plan examples/build-plan.json
+cargo clippy --locked --all-targets --all-features -- -D warnings
+cargo test --locked --all-targets --all-features
+cargo run --locked -- validate-plan examples/build-plan.json
 # Replace these placeholders with local absolute paths:
 cargo run -- validate-profile /path/to/deku-profiles/profiles/minimal-x86_64/profile.json /path/to/deku-system/kickstart/deku-minimal-live.ks
 ```

@@ -45,7 +45,7 @@ python -m unittest discover -s tests -v
 PYTHONPATH=. python -m deku_build.cli examples/build-plan.json
 ```
 
-The Python CLI validates the example plan only. The Rust CLI validates the example plan and can check the profile/Kickstart contract when the repositories are checked out side-by-side; neither CLI runs a build.
+The Python CLI validates the example plan only. The Rust CLI validates build plans, the separate native Deku profile contract, and the Fedora-preview profile/Kickstart contract when the repositories are checked out side-by-side; these commands validate metadata only and do not run a build.
 
 The Rust implementation is pinned by `rust-toolchain.toml` and checked in CI with formatting, Clippy, unit tests and the example plan:
 
@@ -54,6 +54,7 @@ cargo fmt --all -- --check
 cargo clippy --locked --all-targets --all-features -- -D warnings
 cargo test --locked --all-targets --all-features
 cargo run --locked -- validate-plan examples/build-plan.json
+cargo run --locked -- validate-native-profile examples/native-minimal-profile.json
 # Replace these placeholders with local absolute paths:
 cargo run -- validate-profile /path/to/deku-profiles/profiles/minimal-x86_64/profile.json /path/to/deku-system/kickstart/deku-minimal-live.ks
 ```

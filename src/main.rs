@@ -524,109 +524,249 @@ fn validate_profile(profile: &Value, kickstart: &str) -> Result<(), String> {
 }
 
 fn validate_native_profile(profile: &Value) -> Result<(), String> {
-    exact_keys(profile, &["schema_version", "profile_id", "status", "target", "runtime", "package_closure", "build_policy", "integrity", "limitations"], "native profile")?;
-    if profile["schema_version"].as_u64() != Some(1) { return Err("native profile schema_version must be integer 1".into()); }
-    if string(&profile["profile_id"], "profile_id")? != "native-minimal-x86_64" { return Err("unsupported native profile_id".into()); }
+    exact_keys(
+        profile,
+        &[
+            "schema_version",
+            "profile_id",
+            "status",
+            "target",
+            "runtime",
+            "package_closure",
+            "build_policy",
+            "integrity",
+            "limitations",
+        ],
+        "native profile",
+    )?;
+    if profile["schema_version"].as_u64() != Some(1) {
+        return Err("native profile schema_version must be integer 1".into());
+    }
+    if string(&profile["profile_id"], "profile_id")? != "native-minimal-x86_64" {
+        return Err("unsupported native profile_id".into());
+    }
     let status = string(&profile["status"], "status")?;
-    if !matches!(status, "proposed-native-profile" | "locked-native-profile") { return Err("invalid native profile status".into()); }
+    if !matches!(
+        status,
+        "proposed-native-profile" | "locked-native-profile"
+    ) {
+        return Err("invalid native profile status".into());
+    }
 
     let target = &profile["target"];
     exact_keys(target, &["architecture", "firmware", "libc"], "target")?;
-    if string(&target["architecture"], "target.architecture")? != "x86_64" { return Err("native profile currently supports x86_64 only".into()); }
-    if target["firmware"].as_array().map(Vec::len) != Some(1) || target["firmware"][0].as_str() != Some("uefi") {
+    if string(&target["architecture"], "target.architecture")? != "x86_64" {
+        return Err("native profile currently supports x86_64 only".into());
+    }
+    if target["firmware"].as_array().map(Vec::len) != Some(1)
+        || target["firmware"][0].as_str() != Some("uefi")
+    {
         return Err("native profile firmware must be exactly [\"uefi\"]".into());
     }
-    if !matches!(string(&target["libc"], "target.libc")?, "glibc" | "musl") { return Err("target.libc must be glibc or musl".into()); }
+    if !matches!(
+        string(&target["libc"], "target.libc")?,
+        "glibc" | "musl"
+    ) {
+        return Err("target.libc must be glibc or musl".into());
+    }
 
     let runtime = &profile["runtime"];
-    exact_keys(runtime, &["distribution", "package_manager", "rootfs_source", "kernel", "initramfs", "service_manager", "desktop"], "runtime")?;
+    exact_keys(
+        runtime,
+        &[
+            "distribution",
+            "package_manager",
+            "rootfs_source",
+            "kernel",
+            "initramfs",
+            "service_manager",
+            "desktop",
+        ],
+        "runtime",
+    )?;
     for (field, expected) in [
-        ("distribution", "deku"), ("package_manager", "deku-pkg"),
-        ("rootfs_source", "deku-package-closure"), ("kernel", "upstream-linux"),
-        ("initramfs", "dracut"), ("service_manager", "systemd"), ("desktop", "deferred"),
+        ("distribution", "deku"),
+        ("package_manager", "deku-pkg"),
+        ("rootfs_source", "deku-package-closure"),
+        ("kernel", "upstream-linux"),
+        ("initramfs", "dracut"),
+        ("service_manager", "systemd"),
+        ("desktop", "deferred"),
     ] {
-        if string(&runtime[field], field)? != expected { return Err(format!("native runtime.{field} must be {expected}")); }
+        if string(&runtime[field], field)? != expected {
+            return Err(format!("native runtime.{field} must be {expected}"));
+        }
     }
 
     let closure = &profile["package_closure"];
     exact_keys(closure, &["status", "packages"], "package_closure")?;
     let closure_status = string(&closure["status"], "package_closure.status")?;
-    if !matches!(closure_status, "not-yet-locked" | "locked") { return Err("invalid package closure status".into()); }
-    let packages = closure["packages"].as_array().ok_or("package_closure.packages must be an array")?;
-    if packages.len() > MAX_OUTPUTS { return Err(format!("package closure exceeds {MAX_OUTPUTS} packages")); }
+    if !matches!(closure_status, "not-yet-locked" | "locked") {
+        return Err("invalid package closure status".into());
+    }
+    let packages = closure["packages"]
+        .as_array()
+        .ok_or("package_closure.packages must be an array")?;
+    if packages.len() > MAX_OUTPUTS {
+        return Err(format!("package closure exceeds {MAX_OUTPUTS} packages"));
+    }
     if (closure_status == "not-yet-locked" && !packages.is_empty())
         || (closure_status == "locked" && packages.is_empty())
         || (status == "locked-native-profile" && closure_status != "locked")
-        || (status == "proposed-native-profile" && closure_status != "not-yet-locked") {
+        || (status == "proposed-native-profile" && closure_status != "not-yet-locked")
+    {
         return Err("profile status and package closure lock state are inconsistent".into());
     }
+
     let mut names = BTreeSet::new();
     for (index, package) in packages.iter().enumerate() {
-        exact_keys(package, &["name", "version", "origin", "source_revision", "source_sha256", "artifact_sha256", "license", "dependencies"], &format!("packages[{index}]"))?;
+        exact_keys(
+            package,
+            &[
+                "name",
+                "version",
+                "origin",
+                "source_revision",
+                "source_sha256",
+                "artifact_sha256",
+                "license",
+                "dependencies",
+            ],
+            &format!("packages[{index}]"),
+        )?;
         let name = string(&package["name"], "package.name")?;
-        if !valid_token(name, 1, 128, |b| b.is_ascii_lowercase() || b.is_ascii_digit() || b"._+-".contains(&b)) {
+        if !valid_token(name, 1, 128, |b| {
+            b.is_ascii_lowercase() || b.is_ascii_digit() || b"._+-".contains(&b)
+        }) {
             return Err(format!("invalid native package name: {name}"));
         }
-        if !names.insert(name.to_owned()) { return Err(format!("duplicate native package: {name}")); }
+        if !names.insert(name.to_owned()) {
+            return Err(format!("duplicate native package: {name}"));
+        }
         let version = string(&package["version"], "package.version")?;
-        if !valid_token(version, 1, 128, |b| b.is_ascii_alphanumeric() || b"._+-:~".contains(&b)) {
+        if !valid_token(version, 1, 128, |b| {
+            b.is_ascii_alphanumeric() || b"._+-:~".contains(&b)
+        }) {
             return Err(format!("invalid version for package {name}"));
         }
-        if !matches!(string(&package["origin"], "package.origin")?, "deku-recipe" | "upstream-source") {
-            return Err(format!("package {name} must use a Deku recipe or pinned upstream source"));
+        if !matches!(
+            string(&package["origin"], "package.origin")?,
+            "deku-recipe" | "upstream-source"
+        ) {
+            return Err(format!(
+                "package {name} must use a Deku recipe or pinned upstream source"
+            ));
         }
         let revision = string(&package["source_revision"], "source_revision")?;
-        if !valid_token(revision, 40, 40, |b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase()) {
-            return Err(format!("package {name} source_revision must be a full lowercase commit SHA"));
+        if !valid_token(revision, 40, 40, |b| {
+            b.is_ascii_hexdigit() && !b.is_ascii_uppercase()
+        }) {
+            return Err(format!(
+                "package {name} source_revision must be a full lowercase commit SHA"
+            ));
         }
         for field in ["source_sha256", "artifact_sha256"] {
             let digest = string(&package[field], field)?;
-            if !valid_token(digest, 64, 64, |b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase()) {
-                return Err(format!("package {name} {field} must be a lowercase SHA-256 digest"));
+            if !valid_token(digest, 64, 64, |b| {
+                b.is_ascii_hexdigit() && !b.is_ascii_uppercase()
+            }) {
+                return Err(format!(
+                    "package {name} {field} must be a lowercase SHA-256 digest"
+                ));
             }
         }
         let license = string(&package["license"], "package.license")?;
-        if license.trim().is_empty() || license.len() > 128 || license.chars().any(char::is_control) {
-            return Err(format!("package {name} must declare a bounded license expression"));
+        if license.trim().is_empty()
+            || license.len() > 128
+            || license.chars().any(char::is_control)
+        {
+            return Err(format!(
+                "package {name} must declare a bounded license expression"
+            ));
         }
-        let dependencies = package["dependencies"].as_array().ok_or_else(|| format!("package {name} dependencies must be an array"))?;
-        if dependencies.len() > 256 { return Err(format!("package {name} has too many dependencies")); }
+        let dependencies = package["dependencies"]
+            .as_array()
+            .ok_or_else(|| format!("package {name} dependencies must be an array"))?;
+        if dependencies.len() > 256 {
+            return Err(format!("package {name} has too many dependencies"));
+        }
         let mut seen_dependencies = BTreeSet::new();
         for dependency in dependencies {
             let dependency = string(dependency, "package dependency")?;
-            if !valid_token(dependency, 1, 128, |b| b.is_ascii_lowercase() || b.is_ascii_digit() || b"._+-".contains(&b)) {
+            if !valid_token(dependency, 1, 128, |b| {
+                b.is_ascii_lowercase() || b.is_ascii_digit() || b"._+-".contains(&b)
+            }) {
                 return Err(format!("invalid dependency name in package {name}"));
             }
-            if !seen_dependencies.insert(dependency) { return Err(format!("duplicate dependency in package {name}: {dependency}")); }
+            if !seen_dependencies.insert(dependency) {
+                return Err(format!(
+                    "duplicate dependency in package {name}: {dependency}"
+                ));
+            }
         }
     }
     for package in packages {
         let name = package["name"].as_str().unwrap_or_default();
-        for dependency in package["dependencies"].as_array().into_iter().flatten().filter_map(Value::as_str) {
-            if !names.contains(dependency) { return Err(format!("package {name} has unresolved dependency {dependency}")); }
+        for dependency in package["dependencies"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(Value::as_str)
+        {
+            if !names.contains(dependency) {
+                return Err(format!(
+                    "package {name} has unresolved dependency {dependency}"
+                ));
+            }
         }
     }
 
     let policy = &profile["build_policy"];
-    exact_keys(policy, &["source_pins_required", "artifact_digests_required", "repository_trust", "build_network", "privilege"], "build_policy")?;
+    exact_keys(
+        policy,
+        &[
+            "source_pins_required",
+            "artifact_digests_required",
+            "repository_trust",
+            "build_network",
+            "privilege",
+        ],
+        "build_policy",
+    )?;
     if policy["source_pins_required"].as_bool() != Some(true)
         || policy["artifact_digests_required"].as_bool() != Some(true)
         || string(&policy["repository_trust"], "repository_trust")? != "tuf"
         || string(&policy["build_network"], "build_network")? != "disabled-during-build"
-        || string(&policy["privilege"], "privilege")? != "unprivileged" {
-        return Err("native build policy requires pins, digests, TUF, disabled build networking and unprivileged execution".into());
+        || string(&policy["privilege"], "privilege")? != "unprivileged"
+    {
+        return Err(
+            "native build policy requires pins, digests, TUF, disabled build networking and unprivileged execution".into(),
+        );
     }
 
     let integrity = &profile["integrity"];
-    exact_keys(integrity, &["sbom_required", "provenance_required", "vm_boot_required"], "integrity")?;
+    exact_keys(
+        integrity,
+        &["sbom_required", "provenance_required", "vm_boot_required"],
+        "integrity",
+    )?;
     for field in ["sbom_required", "provenance_required", "vm_boot_required"] {
-        if integrity[field].as_bool() != Some(true) { return Err(format!("integrity.{field} must be true")); }
+        if integrity[field].as_bool() != Some(true) {
+            return Err(format!("integrity.{field} must be true"));
+        }
     }
-    let limitations = profile["limitations"].as_array().ok_or("limitations must be an array")?;
-    if limitations.is_empty() || limitations.len() > 64 { return Err("limitations must contain 1 to 64 entries".into()); }
+    let limitations = profile["limitations"]
+        .as_array()
+        .ok_or("limitations must be an array")?;
+    if limitations.is_empty() || limitations.len() > 64 {
+        return Err("limitations must contain 1 to 64 entries".into());
+    }
     for (index, item) in limitations.iter().enumerate() {
         let limitation = string(item, &format!("limitations[{index}]"))?;
-        if limitation.trim().is_empty() || limitation.len() > 1000 || limitation.chars().any(char::is_control) {
+        if limitation.trim().is_empty()
+            || limitation.len() > 1000
+            || limitation.chars().any(char::is_control)
+        {
             return Err(format!("limitations[{index}] must be bounded plain text"));
         }
     }
@@ -674,7 +814,9 @@ fn run() -> Result<(), String> {
                 .map_err(|e| format!("cannot read native profile: {e}"))?;
             let profile = parse_unique_json(&bytes, "native profile")?;
             validate_native_profile(&profile)?;
-            println!("VALID (native profile contract only; no package build, rootfs or ISO was produced)");
+            println!(
+                "VALID (native profile contract only; no package build, rootfs or ISO was produced)"
+            );
             Ok(())
         }
         Some("validate-profile") if args.len() == 4 => {
@@ -897,14 +1039,22 @@ ExecStart=/usr/bin/printf DEKU_BOOT_OK:minimal-x86_64
     fn native_profile_rejects_foreign_runtime_distribution() {
         let mut profile = native_profile_example();
         profile["runtime"]["distribution"] = Value::String("fedora".into());
-        assert!(validate_native_profile(&profile).unwrap_err().contains("runtime.distribution"));
+        assert!(
+            validate_native_profile(&profile)
+                .unwrap_err()
+                .contains("native runtime.distribution")
+        );
     }
 
     #[test]
     fn native_profile_cannot_claim_locked_with_empty_package_closure() {
         let mut profile = native_profile_example();
         profile["status"] = Value::String("locked-native-profile".into());
-        assert!(validate_native_profile(&profile).unwrap_err().contains("lock state"));
+        assert!(
+            validate_native_profile(&profile)
+                .unwrap_err()
+                .contains("lock state")
+        );
     }
 
     #[test]

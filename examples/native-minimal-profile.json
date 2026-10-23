@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "profile_id": "native-minimal-x86_64",
+  "status": "proposed-native-profile",
+  "target": {
+    "architecture": "x86_64",
+    "firmware": [
+      "uefi"
+    ],
+    "libc": "glibc"
+  },
+  "runtime": {
+    "distribution": "deku",
+    "package_manager": "deku-pkg",
+    "rootfs_source": "deku-package-closure",
+    "kernel": "upstream-linux",
+    "initramfs": "dracut",
+    "service_manager": "systemd",
+    "desktop": "deferred"
+  },
+  "package_closure": {
+    "status": "not-yet-locked",
+    "packages": []
+  },
+  "build_policy": {
+    "source_pins_required": true,
+    "artifact_digests_required": true,
+    "repository_trust": "tuf",
+    "build_network": "disabled-during-build",
+    "privilege": "unprivileged"
+  },
+  "integrity": {
+    "sbom_required": true,
+    "provenance_required": true,
+    "vm_boot_required": true
+  },
+  "limitations": [
+    "This is a proposed native architecture contract, not a buildable package closure.",
+    "No native Deku package closure, root filesystem or ISO is produced by validating this profile.",
+    "The Fedora 44 technology-preview image is a separate test fixture and is not this profile's runtime base.",
+    "The first locked closure must contain exact source revisions, source digests, artifact digests, licences and dependency edges for every package."
+  ]
+}

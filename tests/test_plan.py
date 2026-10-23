@@ -39,13 +39,31 @@ class BuildPlanTests(unittest.TestCase):
     def test_path_traversal_is_rejected(self):
         plan = deepcopy(self.plan)
         plan["outputs"][0]["path"] = "../outside.tar"
-        with self.assertRaisesRegex(BuildPlanError, "inside the output directory"):
+        with self.assertRaisesRegex(BuildPlanError, "invalid format|normal relative path segments"):
+            validate_plan(plan)
+
+    def test_current_directory_output_is_rejected(self):
+        plan = deepcopy(self.plan)
+        plan["outputs"][0]["path"] = "."
+        with self.assertRaisesRegex(BuildPlanError, "invalid format|normal relative path segments"):
+            validate_plan(plan)
+
+    def test_empty_path_segment_is_rejected(self):
+        plan = deepcopy(self.plan)
+        plan["outputs"][0]["path"] = "dist//package.tar"
+        with self.assertRaisesRegex(BuildPlanError, "invalid format|normal relative path segments"):
+            validate_plan(plan)
+
+    def test_invalid_url_port_is_rejected(self):
+        plan = deepcopy(self.plan)
+        plan["source"]["url"] = "https://example.com:invalid/source.git"
+        with self.assertRaisesRegex(BuildPlanError, "invalid port"):
             validate_plan(plan)
 
     def test_credentials_in_source_url_are_rejected(self):
         plan = deepcopy(self.plan)
         plan["source"]["url"] = "https://user:password@example.com/source.git"
-        with self.assertRaisesRegex(BuildPlanError, "without embedded credentials"):
+        with self.assertRaisesRegex(BuildPlanError, "embedded credentials"):
             validate_plan(plan)
 
     def test_unknown_top_level_fields_are_rejected(self):

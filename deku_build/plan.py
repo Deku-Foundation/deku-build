@@ -38,8 +38,12 @@ def validate_plan(plan: Any) -> dict[str, Any]:
             "source must contain url, revision, and sha256 only")
     require(isinstance(source["url"], str), "source.url must be a string")
     parsed = urlparse(source["url"])
-    require(parsed.scheme == "https" and bool(parsed.netloc) and not parsed.username and not parsed.password,
+    require(parsed.scheme == "https" and bool(parsed.hostname) and not parsed.username and not parsed.password,
             "source.url must be an HTTPS URL without embedded credentials")
+    try:
+        parsed.port
+    except ValueError as exc:
+        raise BuildPlanError("source.url must not contain an invalid port") from exc
     require(isinstance(source["revision"], str) and _REVISION.fullmatch(source["revision"]) is not None,
             "source.revision must be a full 40-character lowercase commit hash")
     require(isinstance(source["sha256"], str) and _SHA.fullmatch(source["sha256"]) is not None,
@@ -62,8 +66,9 @@ def validate_plan(plan: Any) -> dict[str, Any]:
         path = output["path"]
         require(isinstance(path, str) and _OUTPUT.fullmatch(path) is not None,
                 f"outputs[{i}].path has invalid format")
-        require(not path.startswith("/") and ".." not in path.split("/"),
-                f"outputs[{i}].path must stay inside the output directory")
+        segments = path.split("/")
+        require(all(segment not in {"", ".", ".."} for segment in segments),
+                f"outputs[{i}].path must use normal relative path segments")
         require(path not in seen, f"duplicate output path: {path}")
         seen.add(path)
         require(isinstance(output["kind"], str) and output["kind"] in {"archive", "file", "directory", "package"},

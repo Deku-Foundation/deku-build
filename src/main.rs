@@ -749,13 +749,7 @@ fn validate_native_profile(profile: &Value) -> Result<(), String> {
     let mut visiting = BTreeSet::new();
     let mut visited = BTreeSet::new();
     for package in dependency_graph.keys() {
-        visit_dependency(
-            package,
-            &dependency_graph,
-            &mut visiting,
-            &mut visited,
-            0,
-        )?;
+        visit_dependency(package, &dependency_graph, &mut visiting, &mut visited, 0)?;
     }
 
     let policy = &profile["build_policy"];

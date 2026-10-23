@@ -66,7 +66,7 @@ def validate_plan(plan: Any) -> dict[str, Any]:
                 f"outputs[{i}].path must stay inside the output directory")
         require(path not in seen, f"duplicate output path: {path}")
         seen.add(path)
-        require(output["kind"] in {"archive", "file", "directory", "package"},
+        require(isinstance(output["kind"], str) and output["kind"] in {"archive", "file", "directory", "package"},
                 f"outputs[{i}].kind is unsupported")
     return plan
 

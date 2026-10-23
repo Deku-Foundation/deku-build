@@ -676,7 +676,54 @@ ExecStart=/usr/bin/printf DEKU_BOOT_OK:minimal-x86_64
         assert!(
             validate_profile(&profile, kickstart_example())
                 .unwrap_err()
-                .contains("URLs")
+                .contains("only Fedora 44")
+        );
+    }
+
+    #[test]
+    fn profile_firmware_must_match_the_first_iso_target_exactly() {
+        let mut profile = profile_example();
+        profile["target"]["firmware"]
+            .as_array_mut()
+            .unwrap()
+            .push(Value::String("bios".into()));
+        assert!(
+            validate_profile(&profile, kickstart_example())
+                .unwrap_err()
+                .contains("exactly [\\"uefi\\"]")
+        );
+    }
+
+    #[test]
+    fn profile_boot_target_must_defer_the_desktop() {
+        let mut profile = profile_example();
+        profile["boot_target"]["desktop"] = Value::String("kde-plasma".into());
+        assert!(
+            validate_profile(&profile, kickstart_example())
+                .unwrap_err()
+                .contains("defer the desktop")
+        );
+    }
+
+    #[test]
+    fn profile_limitations_must_be_bounded_plain_text() {
+        let mut profile = profile_example();
+        profile["limitations"] = Value::String("not a list".into());
+        assert!(
+            validate_profile(&profile, kickstart_example())
+                .unwrap_err()
+                .contains("limitations must be an array")
+        );
+    }
+
+    #[test]
+    fn kickstart_must_use_the_exact_official_fedora_urls() {
+        let kickstart = kickstart_example()
+            .replace("download.fedoraproject.org", "packages.example.invalid");
+        assert!(
+            validate_profile(&profile_example(), &kickstart)
+                .unwrap_err()
+                .contains("exact official Fedora 44")
         );
     }
 

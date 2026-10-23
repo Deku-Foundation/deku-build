@@ -670,7 +670,8 @@ fn validate_native_profile(profile: &Value) -> Result<(), String> {
             }
         }
         let license = string(&package["license"], "package.license")?;
-        if license.trim().is_empty() || license.len() > 128 || license.chars().any(char::is_control) {
+        if license.trim().is_empty() || license.len() > 128 || license.chars().any(char::is_control)
+        {
             return Err(format!(
                 "package {name} must declare a bounded license expression"
             ));

@@ -546,10 +546,7 @@ fn validate_native_profile(profile: &Value) -> Result<(), String> {
         return Err("unsupported native profile_id".into());
     }
     let status = string(&profile["status"], "status")?;
-    if !matches!(
-        status,
-        "proposed-native-profile" | "locked-native-profile"
-    ) {
+    if !matches!(status, "proposed-native-profile" | "locked-native-profile") {
         return Err("invalid native profile status".into());
     }
 
@@ -563,10 +560,7 @@ fn validate_native_profile(profile: &Value) -> Result<(), String> {
     {
         return Err("native profile firmware must be exactly [\"uefi\"]".into());
     }
-    if !matches!(
-        string(&target["libc"], "target.libc")?,
-        "glibc" | "musl"
-    ) {
+    if !matches!(string(&target["libc"], "target.libc")?, "glibc" | "musl") {
         return Err("target.libc must be glibc or musl".into());
     }
 
@@ -676,10 +670,7 @@ fn validate_native_profile(profile: &Value) -> Result<(), String> {
             }
         }
         let license = string(&package["license"], "package.license")?;
-        if license.trim().is_empty()
-            || license.len() > 128
-            || license.chars().any(char::is_control)
-        {
+        if license.trim().is_empty() || license.len() > 128 || license.chars().any(char::is_control) {
             return Err(format!(
                 "package {name} must declare a bounded license expression"
             ));

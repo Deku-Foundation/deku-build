@@ -664,7 +664,11 @@ ExecStart=/usr/bin/printf DEKU_BOOT_OK:minimal-x86_64
     #[test]
     fn duplicate_kickstart_package_is_rejected() {
         let kickstart = kickstart_example().replace("bash\n", "bash\nbash\n");
-        assert!(validate_profile(&profile_example(), &kickstart).unwrap_err().contains("duplicate package"));
+        assert!(
+            validate_profile(&profile_example(), &kickstart)
+                .unwrap_err()
+                .contains("duplicate package")
+        );
     }
 
     #[test]

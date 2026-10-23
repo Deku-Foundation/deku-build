@@ -297,8 +297,8 @@ fn validate_profile(profile: &Value, kickstart: &str) -> Result<(), String> {
     let firmware = target["firmware"]
         .as_array()
         .ok_or("profile.target.firmware must be an array")?;
-    if !firmware.iter().any(|item| item.as_str() == Some("uefi")) {
-        return Err("profile must declare UEFI support".into());
+    if firmware.len() != 1 || firmware[0].as_str() != Some("uefi") {
+        return Err("profile firmware must be exactly [\"uefi\"] for the first ISO target".into());
     }
     if string(&target["libc"], "profile.target.libc")? != "glibc" {
         return Err("the Fedora preview requires glibc".into());
@@ -323,6 +323,9 @@ fn validate_profile(profile: &Value, kickstart: &str) -> Result<(), String> {
     let release = string(&bootstrap["release"], "profile.bootstrap.release")?;
     if !valid_token(release, 2, 2, |b| b.is_ascii_digit()) {
         return Err("profile.bootstrap.release must be a two-digit Fedora release".into());
+    }
+    if release != "44" {
+        return Err("only Fedora 44 is supported by the current reviewed ISO builder".into());
     }
     if string(
         &bootstrap["package_manager"],
@@ -358,13 +361,21 @@ fn validate_profile(profile: &Value, kickstart: &str) -> Result<(), String> {
         "profile.boot_target",
     )?;
     if string(&boot_target["stage"], "profile.boot_target.stage")? != "console"
+        || string(
+            &boot_target["kernel_source"],
+            "profile.boot_target.kernel_source",
+        )? != "upstream-linux"
         || string(&boot_target["initramfs"], "profile.boot_target.initramfs")? != "dracut"
         || string(
             &boot_target["service_manager"],
             "profile.boot_target.service_manager",
         )? != "systemd"
+        || string(&boot_target["desktop"], "profile.boot_target.desktop")?
+            != "deferred-until-console-boot-passes"
     {
-        return Err("the first image must target a dracut/systemd console boot".into());
+        return Err(
+            "the first image must target upstream Linux with dracut/systemd console boot and defer the desktop".into(),
+        );
     }
 
     let packages = profile["package_selection"]
@@ -407,6 +418,22 @@ fn validate_profile(profile: &Value, kickstart: &str) -> Result<(), String> {
     ] {
         if integrity[key].as_bool() != Some(true) {
             return Err(format!("profile.integrity.{key} must be true"));
+        }
+    }
+
+    let limitations = profile["limitations"]
+        .as_array()
+        .ok_or("profile.limitations must be an array")?;
+    if limitations.is_empty() || limitations.len() > 64 {
+        return Err("profile.limitations must contain 1 to 64 entries".into());
+    }
+    for (index, item) in limitations.iter().enumerate() {
+        let limitation = string(item, &format!("profile.limitations[{index}]"))?;
+        if limitation.trim().is_empty()
+            || limitation.len() > 1000
+            || limitation.chars().any(char::is_control)
+        {
+            return Err(format!("profile.limitations[{index}] must be a bounded plain-text string"));
         }
     }
 
@@ -466,14 +493,20 @@ fn validate_profile(profile: &Value, kickstart: &str) -> Result<(), String> {
         ));
     }
 
-    let release_repo = format!("/releases/{release}/Everything/x86_64/os/");
-    let updates_repo = format!("/updates/{release}/Everything/x86_64/");
-    if !kickstart.contains(&release_repo) || !kickstart.contains(&updates_repo) {
+    let release_url = format!(
+        "url --url=\"https://download.fedoraproject.org/pub/fedora/linux/releases/{release}/Everything/x86_64/os/\""
+    );
+    let updates_url = format!(
+        "repo --name=\"updates\" --baseurl=\"https://download.fedoraproject.org/pub/fedora/linux/updates/{release}/Everything/x86_64/\""
+    );
+    if !kickstart.lines().any(|line| line.trim() == release_url)
+        || !kickstart.lines().any(|line| line.trim() == updates_url)
+    {
         return Err(format!(
-            "Kickstart release and updates URLs must both match Fedora {release}"
+            "Kickstart must use the exact official Fedora {release} release and updates URLs"
         ));
     }
-    if !kickstart.contains("rootpw --lock") {
+    if !kickstart.lines().any(|line| line.trim() == "rootpw --lock") {
         return Err("Kickstart must lock the root password for this preview".into());
     }
     if !kickstart.contains("DEKU_BOOT_OK:minimal-x86_64")

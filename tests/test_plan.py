@@ -1,9 +1,16 @@
 from copy import deepcopy
 import json
+import tempfile
 import unittest
 from pathlib import Path
 
-from deku_build.plan import BuildPlanError, load_and_validate, validate_plan
+from deku_build.plan import (
+    MAX_OUTPUTS,
+    MAX_PLAN_BYTES,
+    BuildPlanError,
+    load_and_validate,
+    validate_plan,
+)
 
 EXAMPLE = Path(__file__).parents[1] / "examples" / "build-plan.json"
 
@@ -54,11 +61,74 @@ class BuildPlanTests(unittest.TestCase):
         with self.assertRaisesRegex(BuildPlanError, "invalid format|normal relative path segments"):
             validate_plan(plan)
 
+    def test_git_metadata_output_is_rejected(self):
+        plan = deepcopy(self.plan)
+        plan["outputs"][0]["path"] = "cache/.git/config"
+        with self.assertRaisesRegex(BuildPlanError, r"\.git"):
+            validate_plan(plan)
+
+    def test_parent_output_must_be_a_directory(self):
+        plan = deepcopy(self.plan)
+        plan["outputs"] = [
+            {"path": "dist", "kind": "file"},
+            {"path": "dist/package.tar", "kind": "archive"},
+        ]
+        with self.assertRaisesRegex(BuildPlanError, "output path collision"):
+            validate_plan(plan)
+
+    def test_directory_output_can_contain_child_outputs(self):
+        plan = deepcopy(self.plan)
+        plan["outputs"] = [
+            {"path": "dist", "kind": "directory"},
+            {"path": "dist/package.tar", "kind": "archive"},
+        ]
+        self.assertEqual(validate_plan(plan), plan)
+
+    def test_output_collision_is_independent_of_input_order(self):
+        for outputs in (
+            [{"path": "dist", "kind": "file"}, {"path": "dist/package.tar", "kind": "archive"}],
+            [{"path": "dist/package.tar", "kind": "archive"}, {"path": "dist", "kind": "file"}],
+        ):
+            plan = deepcopy(self.plan)
+            plan["outputs"] = outputs
+            with self.subTest(outputs=outputs):
+                with self.assertRaisesRegex(BuildPlanError, "output path collision"):
+                    validate_plan(plan)
+
+    def test_too_many_outputs_are_rejected(self):
+        plan = deepcopy(self.plan)
+        plan["outputs"] = [
+            {"path": f"out-{index:04d}.tar", "kind": "archive"}
+            for index in range(MAX_OUTPUTS + 1)
+        ]
+        with self.assertRaisesRegex(BuildPlanError, "at most"):
+            validate_plan(plan)
+
     def test_invalid_url_port_is_rejected(self):
         plan = deepcopy(self.plan)
         plan["source"]["url"] = "https://example.com:invalid/source.git"
-        with self.assertRaisesRegex(BuildPlanError, "invalid port"):
+        with self.assertRaisesRegex(BuildPlanError, "malformed or contains an invalid port"):
             validate_plan(plan)
+
+    def test_malformed_ipv6_url_is_rejected(self):
+        plan = deepcopy(self.plan)
+        plan["source"]["url"] = "https://[::1/source.git"
+        with self.assertRaisesRegex(BuildPlanError, "malformed or contains an invalid port"):
+            validate_plan(plan)
+
+    def test_source_url_whitespace_is_rejected(self):
+        plan = deepcopy(self.plan)
+        plan["source"]["url"] = "https://example.com/source with spaces.git"
+        with self.assertRaisesRegex(BuildPlanError, "whitespace or control"):
+            validate_plan(plan)
+
+    def test_source_url_query_and_fragment_are_rejected(self):
+        for suffix in ("?token=unexpected", "#moving-target"):
+            plan = deepcopy(self.plan)
+            plan["source"]["url"] += suffix
+            with self.subTest(suffix=suffix):
+                with self.assertRaisesRegex(BuildPlanError, "query string or fragment"):
+                    validate_plan(plan)
 
     def test_credentials_in_source_url_are_rejected(self):
         plan = deepcopy(self.plan)
@@ -71,6 +141,26 @@ class BuildPlanTests(unittest.TestCase):
         plan["run"] = "make"
         with self.assertRaisesRegex(BuildPlanError, "exactly"):
             validate_plan(plan)
+
+    def test_oversized_json_is_rejected_before_deserialization(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "oversized.json"
+            path.write_bytes(b" " * (MAX_PLAN_BYTES + 1))
+            with self.assertRaisesRegex(BuildPlanError, "input limit"):
+                load_and_validate(path)
+
+    def test_invalid_utf8_is_rejected(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "invalid.json"
+            path.write_bytes(b'{"invalid":"\\xff"}')
+            with self.assertRaisesRegex(BuildPlanError, "valid UTF-8 JSON"):
+                load_and_validate(path)
+
+    def test_missing_file_is_reported_as_build_plan_error(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "missing.json"
+            with self.assertRaisesRegex(BuildPlanError, "cannot read plan"):
+                load_and_validate(path)
 
 
 if __name__ == "__main__":

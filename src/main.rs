@@ -259,13 +259,19 @@ fn validate_plan(plan: &Value) -> Result<(), String> {
     Ok(())
 }
 
-
 fn validate_profile(profile: &Value, kickstart: &str) -> Result<(), String> {
     exact_keys(
         profile,
         &[
-            "schema_version", "profile_id", "status", "target", "bootstrap",
-            "boot_target", "package_selection", "integrity", "limitations",
+            "schema_version",
+            "profile_id",
+            "status",
+            "target",
+            "bootstrap",
+            "boot_target",
+            "package_selection",
+            "integrity",
+            "limitations",
         ],
         "profile",
     )?;
@@ -280,11 +286,17 @@ fn validate_profile(profile: &Value, kickstart: &str) -> Result<(), String> {
     }
 
     let target = &profile["target"];
-    exact_keys(target, &["architecture", "firmware", "libc"], "profile.target")?;
+    exact_keys(
+        target,
+        &["architecture", "firmware", "libc"],
+        "profile.target",
+    )?;
     if string(&target["architecture"], "profile.target.architecture")? != "x86_64" {
         return Err("only x86_64 is currently supported by this ISO builder".into());
     }
-    let firmware = target["firmware"].as_array().ok_or("profile.target.firmware must be an array")?;
+    let firmware = target["firmware"]
+        .as_array()
+        .ok_or("profile.target.firmware must be an array")?;
     if !firmware.iter().any(|item| item.as_str() == Some("uefi")) {
         return Err("profile must declare UEFI support".into());
     }
@@ -296,8 +308,12 @@ fn validate_profile(profile: &Value, kickstart: &str) -> Result<(), String> {
     exact_keys(
         bootstrap,
         &[
-            "distribution", "release", "package_manager", "image_builder_candidate",
-            "purpose", "independent_deku_rootfs",
+            "distribution",
+            "release",
+            "package_manager",
+            "image_builder_candidate",
+            "purpose",
+            "independent_deku_rootfs",
         ],
         "profile.bootstrap",
     )?;
@@ -308,11 +324,17 @@ fn validate_profile(profile: &Value, kickstart: &str) -> Result<(), String> {
     if !valid_token(release, 2, 2, |b| b.is_ascii_digit()) {
         return Err("profile.bootstrap.release must be a two-digit Fedora release".into());
     }
-    if string(&bootstrap["package_manager"], "profile.bootstrap.package_manager")? != "dnf" {
+    if string(
+        &bootstrap["package_manager"],
+        "profile.bootstrap.package_manager",
+    )? != "dnf"
+    {
         return Err("Fedora bootstrap must use dnf".into());
     }
-    if string(&bootstrap["image_builder_candidate"], "profile.bootstrap.image_builder_candidate")?
-        != "lorax-livemedia-creator"
+    if string(
+        &bootstrap["image_builder_candidate"],
+        "profile.bootstrap.image_builder_candidate",
+    )? != "lorax-livemedia-creator"
     {
         return Err("the reviewed ISO builder must be Lorax livemedia-creator".into());
     }
@@ -326,25 +348,39 @@ fn validate_profile(profile: &Value, kickstart: &str) -> Result<(), String> {
     let boot_target = &profile["boot_target"];
     exact_keys(
         boot_target,
-        &["stage", "kernel_source", "initramfs", "service_manager", "desktop"],
+        &[
+            "stage",
+            "kernel_source",
+            "initramfs",
+            "service_manager",
+            "desktop",
+        ],
         "profile.boot_target",
     )?;
     if string(&boot_target["stage"], "profile.boot_target.stage")? != "console"
         || string(&boot_target["initramfs"], "profile.boot_target.initramfs")? != "dracut"
-        || string(&boot_target["service_manager"], "profile.boot_target.service_manager")? != "systemd"
+        || string(
+            &boot_target["service_manager"],
+            "profile.boot_target.service_manager",
+        )? != "systemd"
     {
         return Err("the first image must target a dracut/systemd console boot".into());
     }
 
-    let packages = profile["package_selection"].as_array()
+    let packages = profile["package_selection"]
+        .as_array()
         .ok_or("profile.package_selection must be an array")?;
     if packages.is_empty() || packages.len() > MAX_OUTPUTS {
-        return Err(format!("profile.package_selection must contain 1 to {MAX_OUTPUTS} packages"));
+        return Err(format!(
+            "profile.package_selection must contain 1 to {MAX_OUTPUTS} packages"
+        ));
     }
     let mut required_packages = BTreeSet::new();
     for (index, item) in packages.iter().enumerate() {
         let package = string(item, &format!("profile.package_selection[{index}]"))?;
-        if !valid_token(package, 1, 100, |b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_') {
+        if !valid_token(package, 1, 100, |b| {
+            b.is_ascii_alphanumeric() || b == b'-' || b == b'_'
+        }) {
             return Err(format!("invalid package name in profile: {package}"));
         }
         if !required_packages.insert(package.to_owned()) {
@@ -356,24 +392,30 @@ fn validate_profile(profile: &Value, kickstart: &str) -> Result<(), String> {
     exact_keys(
         integrity,
         &[
-            "require_immutable_inputs", "record_source_and_package_manifest",
-            "record_artifact_sha256", "require_vm_boot_evidence",
+            "require_immutable_inputs",
+            "record_source_and_package_manifest",
+            "record_artifact_sha256",
+            "require_vm_boot_evidence",
         ],
         "profile.integrity",
     )?;
     for key in [
-        "require_immutable_inputs", "record_source_and_package_manifest",
-        "record_artifact_sha256", "require_vm_boot_evidence",
+        "require_immutable_inputs",
+        "record_source_and_package_manifest",
+        "record_artifact_sha256",
+        "require_vm_boot_evidence",
     ] {
         if integrity[key].as_bool() != Some(true) {
             return Err(format!("profile.integrity.{key} must be true"));
         }
     }
 
-    let package_start = kickstart.find("%packages")
+    let package_start = kickstart
+        .find("%packages")
         .ok_or("Kickstart is missing its %packages section")?;
     let package_body = &kickstart[package_start + "%packages".len()..];
-    let package_end = package_body.find("%end")
+    let package_end = package_body
+        .find("%end")
         .ok_or("Kickstart %packages section is missing %end")?;
     let mut declared_packages = BTreeSet::new();
     for line in package_body[..package_end].lines() {
@@ -389,18 +431,34 @@ fn validate_profile(profile: &Value, kickstart: &str) -> Result<(), String> {
             return Err(format!("duplicate package in Kickstart: {package}"));
         }
     }
-    let missing: Vec<String> = required_packages.difference(&declared_packages).cloned().collect();
+    let missing: Vec<String> = required_packages
+        .difference(&declared_packages)
+        .cloned()
+        .collect();
     if !missing.is_empty() {
-        return Err(format!("profile packages missing from Kickstart: {}", missing.join(", ")));
+        return Err(format!(
+            "profile packages missing from Kickstart: {}",
+            missing.join(", ")
+        ));
     }
 
     let required_live = [
-        "grub2-pc", "grub2-pc-modules", "grub2-tools", "grub2-tools-extra",
-        "grub2-efi-x64", "grub2-efi-x64-cdboot", "grub2-efi-x64-modules",
-        "efibootmgr", "dracut-live", "dracut-config-generic",
+        "grub2-pc",
+        "grub2-pc-modules",
+        "grub2-tools",
+        "grub2-tools-extra",
+        "grub2-efi-x64",
+        "grub2-efi-x64-cdboot",
+        "grub2-efi-x64-modules",
+        "efibootmgr",
+        "dracut-live",
+        "dracut-config-generic",
     ];
-    let missing_live: Vec<&str> = required_live.iter().copied()
-        .filter(|package| !declared_packages.contains(*package)).collect();
+    let missing_live: Vec<&str> = required_live
+        .iter()
+        .copied()
+        .filter(|package| !declared_packages.contains(*package))
+        .collect();
     if !missing_live.is_empty() {
         return Err(format!(
             "Kickstart omits required live-image/bootloader packages: {}",
@@ -411,7 +469,9 @@ fn validate_profile(profile: &Value, kickstart: &str) -> Result<(), String> {
     let release_repo = format!("/releases/{release}/Everything/x86_64/os/");
     let updates_repo = format!("/updates/{release}/Everything/x86_64/");
     if !kickstart.contains(&release_repo) || !kickstart.contains(&updates_repo) {
-        return Err(format!("Kickstart release and updates URLs must both match Fedora {release}"));
+        return Err(format!(
+            "Kickstart release and updates URLs must both match Fedora {release}"
+        ));
     }
     if !kickstart.contains("rootpw --lock") {
         return Err("Kickstart must lock the root password for this preview".into());
@@ -421,7 +481,9 @@ fn validate_profile(profile: &Value, kickstart: &str) -> Result<(), String> {
         || !kickstart.contains("WantedBy=multi-user.target")
         || kickstart.contains("After=multi-user.target")
     {
-        return Err("Kickstart boot marker service is missing or has unsafe target ordering".into());
+        return Err(
+            "Kickstart boot marker service is missing or has unsafe target ordering".into(),
+        );
     }
     Ok(())
 }
@@ -431,7 +493,8 @@ fn parse_unique_json(bytes: &[u8], label: &str) -> Result<Value, String> {
     let parsed = UniqueValue::deserialize(&mut deserializer)
         .map_err(|e| format!("invalid {label} JSON: {e}"))?
         .0;
-    deserializer.end()
+    deserializer
+        .end()
         .map_err(|e| format!("invalid trailing {label} JSON data: {e}"))?;
     Ok(parsed)
 }
@@ -495,7 +558,6 @@ mod tests {
         serde_json::from_str(include_str!("../examples/build-plan.json")).unwrap()
     }
 
-
     fn profile_example() -> Value {
         serde_json::from_str(
             r#"{
@@ -526,7 +588,8 @@ mod tests {
                 },
                 "limitations": ["experimental only"]
             }"#,
-        ).unwrap()
+        )
+        .unwrap()
     }
 
     fn kickstart_example() -> &'static str {
@@ -577,15 +640,25 @@ ExecStart=/usr/bin/printf DEKU_BOOT_OK:minimal-x86_64
     fn profile_kickstart_release_mismatch_is_rejected() {
         let mut profile = profile_example();
         profile["bootstrap"]["release"] = Value::String("45".into());
-        assert!(validate_profile(&profile, kickstart_example()).unwrap_err().contains("URLs"));
+        assert!(
+            validate_profile(&profile, kickstart_example())
+                .unwrap_err()
+                .contains("URLs")
+        );
     }
 
     #[test]
     fn missing_profile_package_is_rejected() {
         let mut profile = profile_example();
-        profile["package_selection"].as_array_mut().unwrap()
+        profile["package_selection"]
+            .as_array_mut()
+            .unwrap()
             .push(Value::String("not-in-kickstart".into()));
-        assert!(validate_profile(&profile, kickstart_example()).unwrap_err().contains("missing from Kickstart"));
+        assert!(
+            validate_profile(&profile, kickstart_example())
+                .unwrap_err()
+                .contains("missing from Kickstart")
+        );
     }
 
     #[test]
@@ -597,7 +670,11 @@ ExecStart=/usr/bin/printf DEKU_BOOT_OK:minimal-x86_64
     #[test]
     fn missing_boot_marker_is_rejected() {
         let kickstart = kickstart_example().replace("DEKU_BOOT_OK:minimal-x86_64", "NOT_READY");
-        assert!(validate_profile(&profile_example(), &kickstart).unwrap_err().contains("boot marker"));
+        assert!(
+            validate_profile(&profile_example(), &kickstart)
+                .unwrap_err()
+                .contains("boot marker")
+        );
     }
 
     #[test]

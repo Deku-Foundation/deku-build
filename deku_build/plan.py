@@ -56,7 +56,7 @@ def _validate_source_url(value: Any) -> None:
         "source.url must not contain embedded credentials",
     )
     require(
-        not parsed.query and not parsed.fragment,
+        "?" not in value and "#" not in value and not parsed.query and not parsed.fragment,
         "source.url must not contain a query string or fragment",
     )
     require(port is None or 1 <= port <= 65_535, "source.url port must be between 1 and 65535")

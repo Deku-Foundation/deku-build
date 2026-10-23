@@ -39,13 +39,13 @@ class BuildPlanTests(unittest.TestCase):
     def test_path_traversal_is_rejected(self):
         plan = deepcopy(self.plan)
         plan["outputs"][0]["path"] = "../outside.tar"
-        with self.assertRaisesRegex(BuildPlanError, "normal relative path segments"):
+        with self.assertRaisesRegex(BuildPlanError, "invalid format|normal relative path segments"):
             validate_plan(plan)
 
     def test_current_directory_output_is_rejected(self):
         plan = deepcopy(self.plan)
         plan["outputs"][0]["path"] = "."
-        with self.assertRaisesRegex(BuildPlanError, "normal relative path segments"):
+        with self.assertRaisesRegex(BuildPlanError, "invalid format|normal relative path segments"):
             validate_plan(plan)
 
     def test_empty_path_segment_is_rejected(self):

@@ -136,6 +136,20 @@ class BuildPlanTests(unittest.TestCase):
         with self.assertRaisesRegex(BuildPlanError, "embedded credentials"):
             validate_plan(plan)
 
+    def test_duplicate_json_keys_are_rejected(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "duplicate.json"
+            path.write_text(
+                '{"schema_version":1,"schema_version":1,"plan_id":"hello-plan",'
+                '"mode":"validate-only","source":{"url":"https://example.com/src.git",'
+                '"revision":"' + "a" * 40 + '","sha256":"' + "b" * 64 + '"},'
+                '"environment":{"architecture":"x86_64","network":"disabled-during-build",'
+                '"privilege":"unprivileged"},"outputs":[{"path":"pkg.tar","kind":"archive"}]}',
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(BuildPlanError, "duplicate JSON object key"):
+                load_and_validate(path)
+
     def test_unknown_top_level_fields_are_rejected(self):
         plan = deepcopy(self.plan)
         plan["run"] = "make"

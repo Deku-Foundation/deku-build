@@ -28,6 +28,16 @@ def require(ok: bool, message: str) -> None:
         raise BuildPlanError(message)
 
 
+def _unique_object_pairs(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    """Reject duplicate JSON object keys instead of accepting ambiguous metadata."""
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise BuildPlanError(f"duplicate JSON object key: {key}")
+        result[key] = value
+    return result
+
+
 def _validate_source_url(value: Any) -> None:
     require(isinstance(value, str), "source.url must be a string")
     require(
@@ -166,7 +176,7 @@ def load_and_validate(path: str | Path) -> dict[str, Any]:
 
     try:
         text = raw.decode("utf-8")
-        plan = json.loads(text)
+        plan = json.loads(text, object_pairs_hook=_unique_object_pairs)
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise BuildPlanError(f"cannot read valid UTF-8 JSON plan: {exc}") from exc
 

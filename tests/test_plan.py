@@ -152,7 +152,7 @@ class BuildPlanTests(unittest.TestCase):
     def test_invalid_utf8_is_rejected(self):
         with tempfile.TemporaryDirectory() as temporary:
             path = Path(temporary) / "invalid.json"
-            path.write_bytes(b'{"invalid":"\\xff"}')
+            path.write_bytes(b'{"invalid":"' + bytes([0xFF]) + b'"}')
             with self.assertRaisesRegex(BuildPlanError, "valid UTF-8 JSON"):
                 load_and_validate(path)
 

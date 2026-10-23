@@ -690,7 +690,7 @@ ExecStart=/usr/bin/printf DEKU_BOOT_OK:minimal-x86_64
         assert!(
             validate_profile(&profile, kickstart_example())
                 .unwrap_err()
-                .contains("exactly [\\"uefi\\"]")
+                .contains("exactly [\"uefi\"]")
         );
     }
 

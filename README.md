@@ -8,6 +8,8 @@ Deku Build is the build-orchestration project for turning reviewed package recip
 
 ## Current prototype
 
+The plan validators currently include the original Python reference validator and a Rust CLI (`cargo run -- validate-plan examples/build-plan.json`). The Rust CLI rejects duplicate JSON keys, bounds input size, validates pinned source metadata, enforces unprivileged/network-disabled build intent and rejects unsafe output paths. It validates metadata only; it does not fetch sources or execute builds.
+
 The plan validator currently:
 
 - Bounds raw JSON input to 1 MiB before deserialization and rejects invalid UTF-8 and duplicate JSON object keys.
@@ -43,7 +45,16 @@ python -m unittest discover -s tests -v
 PYTHONPATH=. python -m deku_build.cli examples/build-plan.json
 ```
 
-The CLI validates the example plan only; it does not run a build.
+The Python and Rust CLIs validate the example plan only; they do not run a build.
+
+The Rust implementation is pinned by `rust-toolchain.toml` and checked in CI with formatting, Clippy, unit tests and the example plan:
+
+```sh
+cargo fmt --all -- --check
+cargo clippy --all-targets --all-features -- -D warnings
+cargo test --all-targets --all-features
+cargo run -- validate-plan examples/build-plan.json
+```
 
 ## Planned milestones
 

@@ -1,7 +1,7 @@
 use serde::de::{MapAccess, SeqAccess, Visitor};
 use serde::{Deserialize, Deserializer};
 use serde_json::{Map, Number, Value};
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::env;
 use std::fs::File;
 use std::io::{self, Read};
@@ -9,6 +9,7 @@ use std::path::Path;
 
 const MAX_PLAN_BYTES: usize = 1_048_576;
 const MAX_OUTPUTS: usize = 4096;
+const MAX_PACKAGE_DEPENDENCY_DEPTH: usize = 512;
 
 struct UniqueValue(Value);
 
@@ -697,20 +698,64 @@ fn validate_native_profile(profile: &Value) -> Result<(), String> {
             }
         }
     }
+    let mut dependency_graph = BTreeMap::<String, Vec<String>>::new();
     for package in packages {
         let name = package["name"].as_str().unwrap_or_default();
-        for dependency in package["dependencies"]
+        let dependencies = package["dependencies"]
             .as_array()
             .into_iter()
             .flatten()
             .filter_map(Value::as_str)
-        {
-            if !names.contains(dependency) {
+            .map(str::to_owned)
+            .collect::<Vec<_>>();
+        for dependency in &dependencies {
+            if !names.contains(dependency.as_str()) {
                 return Err(format!(
                     "package {name} has unresolved dependency {dependency}"
                 ));
             }
         }
+        dependency_graph.insert(name.to_owned(), dependencies);
+    }
+
+    fn visit_dependency(
+        package: &str,
+        graph: &BTreeMap<String, Vec<String>>,
+        visiting: &mut BTreeSet<String>,
+        visited: &mut BTreeSet<String>,
+        depth: usize,
+    ) -> Result<(), String> {
+        if depth > MAX_PACKAGE_DEPENDENCY_DEPTH {
+            return Err(format!(
+                "package dependency depth exceeds {MAX_PACKAGE_DEPENDENCY_DEPTH}"
+            ));
+        }
+        if visited.contains(package) {
+            return Ok(());
+        }
+        if !visiting.insert(package.to_owned()) {
+            return Err(format!("package dependency cycle detected at {package}"));
+        }
+        if let Some(dependencies) = graph.get(package) {
+            for dependency in dependencies {
+                visit_dependency(dependency, graph, visiting, visited, depth + 1)?;
+            }
+        }
+        visiting.remove(package);
+        visited.insert(package.to_owned());
+        Ok(())
+    }
+
+    let mut visiting = BTreeSet::new();
+    let mut visited = BTreeSet::new();
+    for package in dependency_graph.keys() {
+        visit_dependency(
+            package,
+            &dependency_graph,
+            &mut visiting,
+            &mut visited,
+            0,
+        )?;
     }
 
     let policy = &profile["build_policy"];
@@ -1060,6 +1105,32 @@ ExecStart=/usr/bin/printf DEKU_BOOT_OK:minimal-x86_64
             "artifact_sha256":"1".repeat(64), "license":"MIT", "dependencies":["missing"]
         }]);
         assert!(validate_native_profile(&profile).is_err());
+    }
+
+    #[test]
+    fn native_profile_rejects_dependency_cycles() {
+        let mut profile = native_profile_example();
+        profile["status"] = Value::String("locked-native-profile".into());
+        profile["package_closure"]["status"] = Value::String("locked".into());
+        let package = |name: &str, dependency: &str| {
+            serde_json::json!({
+                "name": name,
+                "version": "1.0.0",
+                "origin": "deku-recipe",
+                "source_revision": "a".repeat(40),
+                "source_sha256": "0".repeat(64),
+                "artifact_sha256": "1".repeat(64),
+                "license": "MIT",
+                "dependencies": [dependency]
+            })
+        };
+        profile["package_closure"]["packages"] =
+            serde_json::json!([package("alpha", "beta"), package("beta", "alpha")]);
+        assert!(
+            validate_native_profile(&profile)
+                .unwrap_err()
+                .contains("dependency cycle")
+        );
     }
 
     #[test]

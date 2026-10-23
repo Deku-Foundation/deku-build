@@ -8,7 +8,7 @@ Deku Build is the build-orchestration project for turning reviewed package recip
 
 ## Current prototype
 
-The validators include the original Python reference validator and a Rust CLI. `validate-plan` checks build-plan metadata, while `validate-profile` checks the initial system profile against its Kickstart package set, Fedora release URLs, UEFI bootloader dependencies and serial boot-marker contract. Both commands reject duplicate JSON keys and bound input size. They validate declarations only; they do not fetch sources, execute package builds or create an ISO.
+The plan validators currently include the original Python reference validator and a Rust CLI (`cargo run -- validate-plan examples/build-plan.json`). The Rust CLI rejects duplicate JSON keys, bounds input size, validates pinned source metadata, enforces unprivileged/network-disabled build intent and rejects unsafe output paths. It validates metadata only; it does not fetch sources or execute builds.
 
 The plan validator currently:
 
@@ -45,7 +45,7 @@ python -m unittest discover -s tests -v
 PYTHONPATH=. python -m deku_build.cli examples/build-plan.json
 ```
 
-The Python CLI validates the example plan only. The Rust CLI validates the example plan and can check the profile/Kickstart contract when the repositories are checked out side-by-side; neither CLI runs a build.
+The Python and Rust CLIs validate the example plan only; they do not run a build.
 
 The Rust implementation is pinned by `rust-toolchain.toml` and checked in CI with formatting, Clippy, unit tests and the example plan:
 
@@ -54,8 +54,6 @@ cargo fmt --all -- --check
 cargo clippy --all-targets --all-features -- -D warnings
 cargo test --all-targets --all-features
 cargo run -- validate-plan examples/build-plan.json
-# Replace these placeholders with local absolute paths:
-cargo run -- validate-profile /path/to/deku-profiles/profiles/minimal-x86_64/profile.json /path/to/deku-system/kickstart/deku-minimal-live.ks
 ```
 
 ## Planned milestones

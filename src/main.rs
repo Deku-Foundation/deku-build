@@ -433,7 +433,9 @@ fn validate_profile(profile: &Value, kickstart: &str) -> Result<(), String> {
             || limitation.len() > 1000
             || limitation.chars().any(char::is_control)
         {
-            return Err(format!("profile.limitations[{index}] must be a bounded plain-text string"));
+            return Err(format!(
+                "profile.limitations[{index}] must be a bounded plain-text string"
+            ));
         }
     }
 
@@ -718,8 +720,8 @@ ExecStart=/usr/bin/printf DEKU_BOOT_OK:minimal-x86_64
 
     #[test]
     fn kickstart_must_use_the_exact_official_fedora_urls() {
-        let kickstart = kickstart_example()
-            .replace("download.fedoraproject.org", "packages.example.invalid");
+        let kickstart =
+            kickstart_example().replace("download.fedoraproject.org", "packages.example.invalid");
         assert!(
             validate_profile(&profile_example(), &kickstart)
                 .unwrap_err()

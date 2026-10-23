@@ -18,6 +18,12 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
+      - name: Bootstrap Cargo.lock for a pinned application build
+        run: |
+          cargo generate-lockfile
+          echo LOCKFILE_BEGIN
+          cat Cargo.lock
+          echo LOCKFILE_END
       - name: Check formatting
         run: cargo fmt --all -- --check
       - name: Run clippy

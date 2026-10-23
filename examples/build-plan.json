@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "plan_id": "example-hello-001",
+  "mode": "validate-only",
+  "source": {
+    "url": "https://example.invalid/deku/hello.git",
+    "revision": "0123456789abcdef0123456789abcdef01234567",
+    "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "environment": {
+    "architecture": "x86_64",
+    "network": "disabled-during-build",
+    "privilege": "unprivileged"
+  },
+  "outputs": [
+    {"path": "hello.tar", "kind": "archive"}
+  ]
+}

@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "build_id": "example-build-001",
+  "outcome": "success",
+  "source": {
+    "url": "https://example.invalid/deku/hello.git",
+    "revision": "0123456789abcdef0123456789abcdef01234567",
+    "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "recipe": {
+    "name": "hello-example",
+    "version": "0.1.0",
+    "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  },
+  "builder": {
+    "image": "ghcr.io/deku-foundation/build-env@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "toolchain": "rust-1.99.1"
+  },
+  "target": {
+    "architecture": "x86_64",
+    "abi": "deku-abi-prototype-1"
+  },
+  "execution": {
+    "started_unix_seconds": 1792800000,
+    "finished_unix_seconds": 1792800042,
+    "isolation": "disposable-vm",
+    "privilege": "unprivileged",
+    "network": "disabled-during-build"
+  },
+  "outputs": [
+    {
+      "path": "dist/hello.pkg",
+      "kind": "package",
+      "size_bytes": 123,
+      "sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+    }
+  ],
+  "tests": [
+    {
+      "name": "version",
+      "outcome": "passed",
+      "exit_code": 0,
+      "duration_millis": 11
+    }
+  ],
+  "attestation_status": "unsigned"
+}

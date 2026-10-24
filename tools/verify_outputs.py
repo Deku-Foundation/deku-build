@@ -39,7 +39,12 @@ def _unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
 
 
 def _safe_relative_path(value: Any) -> bool:
-    if not isinstance(value, str) or not value or len(value.encode("utf-8")) > MAX_PATH_BYTES:
+    if not isinstance(value, str) or not value:
+        return False
+    try:
+        if len(value.encode("utf-8")) > MAX_PATH_BYTES:
+            return False
+    except UnicodeEncodeError:
         return False
     if value.startswith("/") or "\\" in value:
         return False
@@ -79,8 +84,9 @@ def _parse_result(path: str) -> list[dict[str, Any]]:
     except (UnicodeDecodeError, json.JSONDecodeError, VerificationError, RecursionError) as error:
         raise VerificationError(f"invalid result JSON: {error}") from error
 
-    if not isinstance(result, dict) or result.get("schema_version") != 1:
-        raise VerificationError("result must be an object with schema_version=1")
+    schema_version = result.get("schema_version") if isinstance(result, dict) else None
+    if isinstance(schema_version, bool) or not isinstance(schema_version, int) or schema_version != 1:
+        raise VerificationError("result must be an object with integer schema_version=1")
     if result.get("outcome") != "success":
         raise VerificationError("only successful build results can be output-verified")
     outputs = result.get("outputs")
@@ -96,7 +102,7 @@ def _parse_result(path: str) -> list[dict[str, Any]]:
             raise VerificationError(f"unsafe output path: {output_path!r}")
         if output_path in seen:
             raise VerificationError(f"duplicate output path: {output_path}")
-        if item["kind"] not in {"package", "archive", "file"}:
+        if not isinstance(item["kind"], str) or item["kind"] not in {"package", "archive", "file"}:
             raise VerificationError(f"invalid output kind: {output_path}")
         size = item["size_bytes"]
         if isinstance(size, bool) or not isinstance(size, int) or size <= 0:

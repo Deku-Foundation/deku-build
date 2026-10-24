@@ -135,6 +135,24 @@ fn lower_id(value: &str, max_len: usize) -> bool {
             .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-')
 }
 
+fn package_name(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 128
+        && value.as_bytes()[0].is_ascii_lowercase()
+        && value.bytes().all(|byte| {
+            byte.is_ascii_lowercase() || byte.is_ascii_digit() || matches!(byte, b'+' | b'.' | b'_' | b'-')
+        })
+}
+
+fn version_token(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 128
+        && value.as_bytes()[0].is_ascii_alphanumeric()
+        && value.bytes().all(|byte| {
+            byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'+' | b':' | b'~' | b'_' | b'-')
+        })
+}
+
 fn canonical_hex(value: &str, length: usize) -> bool {
     value.len() == length
         && value
@@ -157,10 +175,15 @@ fn source_url_is_safe(value: &str) -> bool {
     let Ok(url) = Url::parse(value) else {
         return false;
     };
+    let authority = value
+        .split_once("://")
+        .map(|(_, rest)| rest.split('/').next().unwrap_or_default())
+        .unwrap_or_default();
     url.scheme() == "https"
         && url.host_str().is_some()
         && url.username().is_empty()
         && url.password().is_none()
+        && !authority.ends_with(':')
         && url.query().is_none()
         && url.fragment().is_none()
 }
@@ -172,23 +195,43 @@ fn pinned_oci_image_is_safe(value: &str) -> bool {
     if !canonical_hex(digest, 64) || name.is_empty() || name.len() > 255 {
         return false;
     }
-    let valid_component = |part: &str| {
-        !part.is_empty()
-            && part != "."
-            && part != ".."
-            && part.bytes().all(|byte| {
-                byte.is_ascii_lowercase()
-                    || byte.is_ascii_digit()
-                    || matches!(byte, b'.' | b'-' | b'_' | b':' )
-            })
-    };
     let parts: Vec<&str> = name.split('/').collect();
-    !parts.is_empty() && parts.iter().all(|part| valid_component(part))
+    if parts.is_empty() || parts.iter().any(|part| part.is_empty() || *part == "." || *part == "..") {
+        return false;
+    }
+    let mut host_parts = parts[0].splitn(2, ':');
+    let host = host_parts.next().unwrap_or_default();
+    if host.is_empty()
+        || !host.bytes().all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || matches!(byte, b'.' | b'-'))
+        || host.starts_with('.')
+        || host.ends_with('.')
+    {
+        return false;
+    }
+    if let Some(port) = host_parts.next() {
+        if port.is_empty() || !port.bytes().all(|byte| byte.is_ascii_digit()) {
+            return false;
+        }
+        if port.parse::<u16>().map_or(true, |value| value == 0) {
+            return false;
+        }
+    }
+    parts[1..].iter().all(|part| {
+        part.as_bytes()[0].is_ascii_lowercase()
+            || part.as_bytes()[0].is_ascii_digit()
+    }) && parts[1..].iter().all(|part| {
+        part.bytes().all(|byte| {
+            byte.is_ascii_lowercase()
+                || byte.is_ascii_digit()
+                || matches!(byte, b'.' | b'_' | b'-')
+        })
+    })
 }
 
 fn safe_relative_path(value: &str) -> bool {
     !value.is_empty()
         && value.len() <= 200
+        && value.as_bytes()[0].is_ascii_alphanumeric()
         && !value.starts_with('/')
         && !value.contains('\\')
         && value.bytes().all(|byte| {
@@ -228,10 +271,10 @@ pub fn validate_build_result(result: &BuildResult) -> Result<(), String> {
     if !canonical_hex(&result.source.sha256, 64) {
         return Err("source.sha256 must be a lowercase SHA-256 digest".into());
     }
-    if !lower_id(&result.recipe.name, 128) {
+    if !package_name(&result.recipe.name) {
         return Err("recipe.name must be a lowercase package identifier".into());
     }
-    if !token(&result.recipe.version, 128) {
+    if !version_token(&result.recipe.version) {
         return Err("recipe.version is invalid".into());
     }
     if !canonical_hex(&result.recipe.sha256, 64) {

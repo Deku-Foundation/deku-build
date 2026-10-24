@@ -139,5 +139,18 @@ class VerifyOutputsTests(unittest.TestCase):
             verify_outputs(str(self.result_path), str(self.root))
 
 
+    def test_rejects_boolean_schema_version(self):
+        self.result["schema_version"] = True
+        self.write_result()
+        with self.assertRaisesRegex(VerificationError, "integer schema_version=1"):
+            verify_outputs(str(self.result_path), str(self.root))
+
+    def test_rejects_unexpected_type_for_output_kind(self):
+        self.result["outputs"][0]["kind"] = []
+        self.write_result()
+        with self.assertRaisesRegex(VerificationError, "invalid output kind"):
+            verify_outputs(str(self.result_path), str(self.root))
+
+
 if __name__ == "__main__":
     unittest.main()

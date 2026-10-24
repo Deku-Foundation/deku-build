@@ -196,7 +196,7 @@ fn pinned_oci_image_is_safe(value: &str) -> bool {
         return false;
     }
     let parts: Vec<&str> = name.split('/').collect();
-    if parts.is_empty() || parts.iter().any(|part| part.is_empty() || *part == "." || *part == "..") {
+    if parts.len() < 2 || parts.iter().any(|part| part.is_empty() || *part == "." || *part == "..") {
         return false;
     }
     let mut host_parts = parts[0].splitn(2, ':');
@@ -412,6 +412,31 @@ mod tests {
         let mut result = example();
         result.source.url = "https://user:pass@example.invalid/source.git".into();
         assert!(validate_build_result(&result).unwrap_err().contains("source.url"));
+    }
+
+    #[test]
+    fn accepts_version_tokens_and_package_name_separators_from_recipe_schema() {
+        let mut result = example();
+        result.recipe.name = "lib.foo+compat".into();
+        result.recipe.version = "1:2.3~rc1".into();
+        assert_eq!(validate_build_result(&result), Ok(()));
+    }
+
+    #[test]
+    fn rejects_empty_source_port_and_malformed_pinned_image_names() {
+        let mut result = example();
+        result.source.url = "https://example.invalid:/repo.git".into();
+        assert!(validate_build_result(&result).is_err());
+
+        for image in [
+            "ghcr.io/deku/../build-env@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+            "ghcr.io:abc/deku/build-env@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+            "ghcr.io/deku/build-env:latest",
+        ] {
+            let mut result = example();
+            result.builder.image = image.into();
+            assert!(validate_build_result(&result).is_err(), "accepted image {image}");
+        }
     }
 
     #[test]

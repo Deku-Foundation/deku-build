@@ -28,3 +28,5 @@ jobs:
         run: cargo run --locked -- validate-plan examples/build-plan.json
       - name: Validate independent native profile contract
         run: cargo run --locked -- validate-native-profile examples/native-minimal-profile.json
+      - name: Validate unsigned build-result contract fixture
+        run: cargo run --locked -- validate-build-result examples/build-result.json

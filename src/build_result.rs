@@ -140,7 +140,9 @@ fn package_name(value: &str) -> bool {
         && value.len() <= 128
         && value.as_bytes()[0].is_ascii_lowercase()
         && value.bytes().all(|byte| {
-            byte.is_ascii_lowercase() || byte.is_ascii_digit() || matches!(byte, b'+' | b'.' | b'_' | b'-')
+            byte.is_ascii_lowercase()
+                || byte.is_ascii_digit()
+                || matches!(byte, b'+' | b'.' | b'_' | b'-')
         })
 }
 
@@ -196,13 +198,19 @@ fn pinned_oci_image_is_safe(value: &str) -> bool {
         return false;
     }
     let parts: Vec<&str> = name.split('/').collect();
-    if parts.len() < 2 || parts.iter().any(|part| part.is_empty() || *part == "." || *part == "..") {
+    if parts.len() < 2
+        || parts
+            .iter()
+            .any(|part| part.is_empty() || *part == "." || *part == "..")
+    {
         return false;
     }
     let mut host_parts = parts[0].splitn(2, ':');
     let host = host_parts.next().unwrap_or_default();
     if host.is_empty()
-        || !host.bytes().all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || matches!(byte, b'.' | b'-'))
+        || !host.bytes().all(|byte| {
+            byte.is_ascii_lowercase() || byte.is_ascii_digit() || matches!(byte, b'.' | b'-')
+        })
         || host.starts_with('.')
         || host.ends_with('.')
     {
@@ -216,14 +224,15 @@ fn pinned_oci_image_is_safe(value: &str) -> bool {
             return false;
         }
     }
-    parts[1..].iter().all(|part| {
-        part.as_bytes()[0].is_ascii_lowercase()
-            || part.as_bytes()[0].is_ascii_digit()
-    }) && parts[1..].iter().all(|part| {
-        part.bytes().all(|byte| {
-            byte.is_ascii_lowercase()
-                || byte.is_ascii_digit()
-                || matches!(byte, b'.' | b'_' | b'-')
+    parts[1..]
+        .iter()
+        .all(|part| part.as_bytes()[0].is_ascii_lowercase() || part.as_bytes()[0].is_ascii_digit())
+        && parts[1..].iter().all(|part| {
+            part.bytes().all(|byte| {
+                byte.is_ascii_lowercase()
+                    || byte.is_ascii_digit()
+                    || matches!(byte, b'.' | b'_' | b'-')
+            })
         })
     })
 }
@@ -234,9 +243,9 @@ fn safe_relative_path(value: &str) -> bool {
         && value.as_bytes()[0].is_ascii_alphanumeric()
         && !value.starts_with('/')
         && !value.contains('\\')
-        && value.bytes().all(|byte| {
-            byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-' | b'/')
-        })
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-' | b'/'))
         && value.split('/').all(|segment| {
             !segment.is_empty()
                 && segment != "."
@@ -263,7 +272,10 @@ pub fn validate_build_result(result: &BuildResult) -> Result<(), String> {
         return Err("build_id must be lowercase ASCII letters, digits and hyphens".into());
     }
     if !source_url_is_safe(&result.source.url) {
-        return Err("source.url must be a safe absolute HTTPS URL without credentials/query/fragment".into());
+        return Err(
+            "source.url must be a safe absolute HTTPS URL without credentials/query/fragment"
+                .into(),
+        );
     }
     if !canonical_hex(&result.source.revision, 40) {
         return Err("source.revision must be a full lowercase 40-character commit hash".into());
@@ -294,7 +306,8 @@ pub fn validate_build_result(result: &BuildResult) -> Result<(), String> {
     }
     if result.execution.started_unix_seconds == 0
         || result.execution.finished_unix_seconds < result.execution.started_unix_seconds
-        || result.execution.finished_unix_seconds - result.execution.started_unix_seconds > MAX_BUILD_SECONDS
+        || result.execution.finished_unix_seconds - result.execution.started_unix_seconds
+            > MAX_BUILD_SECONDS
     {
         return Err("execution timestamps are invalid or exceed the seven-day limit".into());
     }
@@ -335,7 +348,10 @@ pub fn validate_build_result(result: &BuildResult) -> Result<(), String> {
     let sorted_paths: Vec<&str> = output_paths.iter().copied().collect();
     for pair in sorted_paths.windows(2) {
         if pair[1].starts_with(&format!("{}/", pair[0])) {
-            return Err(format!("output path collision: {} and {}", pair[0], pair[1]));
+            return Err(format!(
+                "output path collision: {} and {}",
+                pair[0], pair[1]
+            ));
         }
     }
 
@@ -355,10 +371,16 @@ pub fn validate_build_result(result: &BuildResult) -> Result<(), String> {
                 return Err(format!("passed test must have exit_code=0: {}", test.name));
             }
             TestOutcome::Failed if test.exit_code == Some(0) => {
-                return Err(format!("failed test cannot have exit_code=0: {}", test.name));
+                return Err(format!(
+                    "failed test cannot have exit_code=0: {}",
+                    test.name
+                ));
             }
             TestOutcome::Skipped if test.exit_code.is_some() => {
-                return Err(format!("skipped test must not have an exit code: {}", test.name));
+                return Err(format!(
+                    "skipped test must not have an exit code: {}",
+                    test.name
+                ));
             }
             _ => {}
         }
@@ -371,7 +393,11 @@ pub fn validate_build_result(result: &BuildResult) -> Result<(), String> {
         if result.tests.is_empty() {
             return Err("successful build must include test evidence".into());
         }
-        if result.tests.iter().any(|test| test.outcome != TestOutcome::Passed) {
+        if result
+            .tests
+            .iter()
+            .any(|test| test.outcome != TestOutcome::Passed)
+        {
             return Err("successful build must not contain failed or skipped tests".into());
         }
     }
@@ -398,8 +424,10 @@ mod tests {
         let duplicate = br#"{"schema_version":1,"schema_version":1}"#;
         assert!(validate_build_result_bytes(duplicate).is_err());
 
-        let unknown = include_str!("../examples/build-result.json")
-            .replace("\"attestation_status\": \"unsigned\"", "\"attestation_status\": \"unsigned\", \"execute\": true");
+        let unknown = include_str!("../examples/build-result.json").replace(
+            "\"attestation_status\": \"unsigned\"",
+            "\"attestation_status\": \"unsigned\", \"execute\": true",
+        );
         assert!(validate_build_result_bytes(unknown.as_bytes()).is_err());
     }
 
@@ -407,11 +435,19 @@ mod tests {
     fn rejects_mutable_or_unsafe_source_pins() {
         let mut result = example();
         result.source.revision = "main".into();
-        assert!(validate_build_result(&result).unwrap_err().contains("source.revision"));
+        assert!(
+            validate_build_result(&result)
+                .unwrap_err()
+                .contains("source.revision")
+        );
 
         let mut result = example();
         result.source.url = "https://user:pass@example.invalid/source.git".into();
-        assert!(validate_build_result(&result).unwrap_err().contains("source.url"));
+        assert!(
+            validate_build_result(&result)
+                .unwrap_err()
+                .contains("source.url")
+        );
     }
 
     #[test]
@@ -435,7 +471,10 @@ mod tests {
         ] {
             let mut result = example();
             result.builder.image = image.into();
-            assert!(validate_build_result(&result).is_err(), "accepted image {image}");
+            assert!(
+                validate_build_result(&result).is_err(),
+                "accepted image {image}"
+            );
         }
     }
 
@@ -443,53 +482,89 @@ mod tests {
     fn rejects_unpinned_builder_and_networked_execution() {
         let mut result = example();
         result.builder.image = "ghcr.io/deku/build-env:latest".into();
-        assert!(validate_build_result(&result).unwrap_err().contains("builder.image"));
+        assert!(
+            validate_build_result(&result)
+                .unwrap_err()
+                .contains("builder.image")
+        );
 
         let mut result = example();
         result.execution.network = "enabled".into();
-        assert!(validate_build_result(&result).unwrap_err().contains("network must be disabled"));
+        assert!(
+            validate_build_result(&result)
+                .unwrap_err()
+                .contains("network must be disabled")
+        );
     }
 
     #[test]
     fn rejects_unsafe_paths_and_path_collisions() {
         let mut result = example();
         result.outputs[0].path = "dist/../escape.pkg".into();
-        assert!(validate_build_result(&result).unwrap_err().contains("unsafe output path"));
+        assert!(
+            validate_build_result(&result)
+                .unwrap_err()
+                .contains("unsafe output path")
+        );
 
         let mut result = example();
         let mut child = result.outputs[0].clone();
         child.path = "dist/hello.pkg".into();
         result.outputs[0].path = "dist".into();
         result.outputs.push(child);
-        assert!(validate_build_result(&result).unwrap_err().contains("output path collision"));
+        assert!(
+            validate_build_result(&result)
+                .unwrap_err()
+                .contains("output path collision")
+        );
     }
 
     #[test]
     fn success_requires_outputs_and_all_tests_to_pass() {
         let mut result = example();
         result.outputs.clear();
-        assert!(validate_build_result(&result).unwrap_err().contains("at least one output"));
+        assert!(
+            validate_build_result(&result)
+                .unwrap_err()
+                .contains("at least one output")
+        );
 
         let mut result = example();
         result.tests[0].outcome = TestOutcome::Skipped;
         result.tests[0].exit_code = None;
-        assert!(validate_build_result(&result).unwrap_err().contains("skipped tests"));
+        assert!(
+            validate_build_result(&result)
+                .unwrap_err()
+                .contains("skipped tests")
+        );
     }
 
     #[test]
     fn rejects_timestamp_inversion_and_successful_test_with_nonzero_exit_code() {
         let mut result = example();
         result.execution.finished_unix_seconds = result.execution.started_unix_seconds - 1;
-        assert!(validate_build_result(&result).unwrap_err().contains("timestamps"));
+        assert!(
+            validate_build_result(&result)
+                .unwrap_err()
+                .contains("timestamps")
+        );
 
         let mut result = example();
         result.tests[0].exit_code = Some(1);
-        assert!(validate_build_result(&result).unwrap_err().contains("exit_code=0"));
+        assert!(
+            validate_build_result(&result)
+                .unwrap_err()
+                .contains("exit_code=0")
+        );
     }
 
     #[test]
     fn rejects_oversized_result_before_parsing() {
         let bytes = vec![b' '; MAX_RESULT_BYTES + 1];
-        assert!(validate_build_result_bytes(&bytes).unwrap_err().contains("exceeds"));
+        assert!(
+            validate_build_result_bytes(&bytes)
+                .unwrap_err()
+                .contains("exceeds")
+        );
     }
 }

@@ -583,9 +583,16 @@ fn run() -> Result<(), String> {
             let bytes = read_bounded(Path::new(&args[2]), "build result")
                 .map_err(|e| format!("cannot read build result: {e}"))?;
             let result = build_result::validate_build_result_bytes(&bytes)?;
-            println!("VALID (build-result schema only; record is unsigned and artifact bytes were not inspected)");
+            println!(
+                "VALID (build-result schema only; record is unsigned and artifact bytes were not inspected)"
+            );
             println!("build_id: {}", result.build_id);
-            println!("outcome: {:?}; outputs: {}; tests: {}", result.outcome, result.outputs.len(), result.tests.len());
+            println!(
+                "outcome: {:?}; outputs: {}; tests: {}",
+                result.outcome,
+                result.outputs.len(),
+                result.tests.len()
+            );
             Ok(())
         }
         Some("validate-native-profile") if args.len() == 3 => {

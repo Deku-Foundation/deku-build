@@ -234,7 +234,6 @@ fn pinned_oci_image_is_safe(value: &str) -> bool {
                     || matches!(byte, b'.' | b'_' | b'-')
             })
         })
-    })
 }
 
 fn safe_relative_path(value: &str) -> bool {

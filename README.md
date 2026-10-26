@@ -1,6 +1,6 @@
 # Deku Build
 
-Deku Build is the Rust-first control plane for turning reviewed package recipes and pinned source inputs into traceable artifacts. It will own orchestration and evidence generation, not run untrusted package commands on the coordinator.
+Deku Build validates package build plans and typed build-result records. The Rust CLI does not yet fetch sources, execute recipes or produce package artifacts; those are separate milestones.
 
 ## Status
 

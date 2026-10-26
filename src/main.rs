@@ -262,7 +262,6 @@ fn validate_plan(plan: &Value) -> Result<(), String> {
     Ok(())
 }
 
-
 fn validate_native_profile(profile: &Value) -> Result<(), String> {
     exact_keys(
         profile,
